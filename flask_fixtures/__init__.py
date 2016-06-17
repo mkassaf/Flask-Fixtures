@@ -85,8 +85,9 @@ def setup(obj):
 
     # Push a request and/or app context onto the stack
     push_ctx(getattr(obj, 'app'))
-
+   
     # Setup the database
+    obj.db.drop_all()
     obj.db.create_all()
     # Rollback any lingering transactions
     obj.db.session.rollback()
