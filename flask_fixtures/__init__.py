@@ -35,6 +35,11 @@ except ImportError:
 
 __version__ = '0.3.7'
 
+# storing tables loaded in the fixtures
+_fixture_tables = []
+
+# storing fixtures loaded from filesystem
+_fixture_dict = {}
 
 # Configure the root logger for the library
 logger_format_string = '[%(levelname)s] %(message)s in File "%(pathname)s", line %(lineno)d, in %(funcName)s'
@@ -86,9 +91,6 @@ def setup(obj):
     # Push a request and/or app context onto the stack
     push_ctx(getattr(obj, 'app'))
    
-    # Setup the database
-    obj.db.drop_all()
-    obj.db.create_all()
     # Rollback any lingering transactions
     obj.db.session.rollback()
 
@@ -108,8 +110,12 @@ def setup(obj):
         for directory in fixtures_dirs:
             filepath = os.path.join(directory, filename)
             if os.path.exists(filepath):
-                # TODO load the data into the database
-                load_fixtures(obj.db, loaders.load(filepath))
+                # avoid loading from filesystem everytime
+                fixtures = _fixture_dict.get(filepath)
+                if not fixtures:
+                    fixtures = loaders.load(filepath)
+                    _fixture_dict[filepath] = fixtures
+                load_fixtures(obj.db,fixtures)
                 break
         else:
             raise IOError("Error loading '{0}'. File could not be found".format(filename))
@@ -118,7 +124,7 @@ def setup(obj):
 def teardown(obj):
     log.info('tearing down fixtures...')
     obj.db.session.expunge_all()
-    obj.db.drop_all()
+    delete_fixtures(obj.db)
     pop_ctx()
 
 
@@ -137,11 +143,25 @@ def load_fixtures(db, fixtures):
                 obj = model(**fields)
                 db.session.add(obj)
             db.session.commit()
+            # store the table associated with this model for future cleanup
+            _fixture_tables.append(Table(model.__tablename__, metadata))
         elif 'table' in fixture:
             table = Table(fixture['table'], metadata)
             conn.execute(table.insert(), fixture['records'])
+            _fixture_tables.append(table)
         else:
             raise ValueError("Fixture missing a 'model' or 'table' field: {0}".format(json.dumps(fixture)))
+
+def delete_fixtures(db):
+    """Deletes the loaded fixtures from database
+    """
+    conn = db.engine.connect()
+
+    # reversing the tables to ensure that dependendent table gets deleted first
+    for table in reversed(_fixture_tables):
+        # delete the tables loaded in this fixture
+        conn.execute(table.delete())
+        _fixture_tables.remove(table)
 
 
 class MetaFixturesMixin(type):
