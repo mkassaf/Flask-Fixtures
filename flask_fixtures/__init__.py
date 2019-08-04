@@ -94,7 +94,6 @@ def setup(obj):
     # Rollback any lingering transactions
     obj.db.session.rollback()
 
-
     # Construct a list of paths within which fixtures may reside
     default_fixtures_dir = os.path.join(current_app.root_path, 'fixtures')
 
@@ -155,13 +154,11 @@ def load_fixtures(db, fixtures):
 def delete_fixtures(db):
     """Deletes the loaded fixtures from database
     """
-    conn = db.engine.connect()
-
     # reversing the tables to ensure that dependendent table gets deleted first
-    for table in reversed(_fixture_tables):
-        # delete the tables loaded in this fixture
-        conn.execute(table.delete())
-        _fixture_tables.remove(table)
+    table_list = ''.join(reversed(['%s, ' % table.name for table in _fixture_tables]))[:-2]
+    db.session.execute('TRUNCATE TABLE %s RESTART IDENTITY CASCADE;' % table_list)
+    db.session.commit()
+    del _fixture_tables[:]
 
 
 class MetaFixturesMixin(type):
