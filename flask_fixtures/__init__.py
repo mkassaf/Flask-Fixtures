@@ -1,5 +1,5 @@
 """
-    flask.ext.fixtures
+    utils.flask_fixtures
     ~~~~~~~~~~~~~~~~~~
 
     Flask-Fixtures is a `Flask <http://flask.pocoo.org>`_ extension that aids
@@ -33,7 +33,7 @@ try:
 except ImportError:
     import json
 
-__version__ = '0.3.7'
+__version__ = '0.3.9'
 
 # storing tables loaded in the fixtures
 _fixture_tables = []
@@ -122,7 +122,7 @@ def setup(obj):
 
 def teardown(obj):
     log.info('tearing down fixtures...')
-    obj.db.session.expunge_all()
+    # obj.db.session.expunge_all()
     delete_fixtures(obj.db)
     pop_ctx()
 
@@ -143,7 +143,7 @@ def load_fixtures(db, fixtures):
                 db.session.add(obj)
             db.session.commit()
             # store the table associated with this model for future cleanup
-            _fixture_tables.append(Table(model.__tablename__, metadata))
+            _fixture_tables.append(model.__table__)
         elif 'table' in fixture:
             table = Table(fixture['table'], metadata)
             conn.execute(table.insert(), fixture['records'])
@@ -154,11 +154,12 @@ def load_fixtures(db, fixtures):
 def delete_fixtures(db):
     """Deletes the loaded fixtures from database
     """
-    # reversing the tables to ensure that dependendent table gets deleted first
-    table_list = ''.join(reversed(['%s, ' % table.name for table in _fixture_tables]))[:-2]
-    db.session.execute('TRUNCATE TABLE %s RESTART IDENTITY CASCADE;' % table_list)
-    db.session.commit()
-    del _fixture_tables[:]
+    for table in _fixture_tables:
+        engine = db.get_engine(table.bind) if table.bind else db.engine
+        with engine.connect() as conn:
+            trans = conn.begin()
+            conn.execute('TRUNCATE TABLE %s RESTART IDENTITY CASCADE;' % table.name)
+            trans.commit()
 
 
 class MetaFixturesMixin(type):
