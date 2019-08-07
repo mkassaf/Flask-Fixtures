@@ -82,4 +82,3 @@ def can_persist_fixtures():
     filename = inspect.stack()[-1][1]
     executable = os.path.split(filename)[1]
     return executable in ('py.test', 'nosetests')
-

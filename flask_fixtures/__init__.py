@@ -1,5 +1,5 @@
 """
-    utils.flask_fixtures
+    flask.ext.fixtures
     ~~~~~~~~~~~~~~~~~~
 
     Flask-Fixtures is a `Flask <http://flask.pocoo.org>`_ extension that aids
@@ -13,6 +13,7 @@ from __future__ import absolute_import
 
 import logging
 import os
+import time
 
 from sqlalchemy import Table
 
@@ -103,7 +104,6 @@ def setup(obj):
         if not os.path.isabs(directory):
             directory = os.path.abspath(os.path.join(current_app.root_path, directory))
         fixtures_dirs.append(directory)
-
     # Load all of the fixtures
     for filename in obj.fixtures:
         for directory in fixtures_dirs:
@@ -119,11 +119,14 @@ def setup(obj):
         else:
             raise IOError("Error loading '{0}'. File could not be found".format(filename))
 
-
 def teardown(obj):
     log.info('tearing down fixtures...')
-    # obj.db.session.expunge_all()
-    delete_fixtures(obj.db)
+    if obj.truncate_db:
+        # truncate the whole db, truncate_db is specified in child test class
+        truncate_db(obj.db)
+    else:
+        # just truncate the tables loaded in the fixtures
+        delete_fixtures(obj.db)
     pop_ctx()
 
 
@@ -132,7 +135,6 @@ def load_fixtures(db, fixtures):
     """
     conn = db.engine.connect()
     metadata = db.metadata
-
     for fixture in fixtures:
         if 'model' in fixture:
             module_name, class_name = fixture['model'].rsplit('.', 1)
@@ -154,12 +156,34 @@ def load_fixtures(db, fixtures):
 def delete_fixtures(db):
     """Deletes the loaded fixtures from database
     """
-    for table in _fixture_tables:
-        engine = db.get_engine(table.bind) if table.bind else db.engine
-        with engine.connect() as conn:
-            trans = conn.begin()
-            conn.execute('TRUNCATE TABLE %s RESTART IDENTITY CASCADE;' % table.name)
-            trans.commit()
+    truncate_db(db, _fixture_tables)
+    del _fixture_tables[:]
+
+def truncate_db(db, fixture_tables=[]):
+    # we can have multiple binds, get the tables and engines with each table
+    binds = db.get_binds()
+
+    if fixture_tables:
+        # only truncate the tables that were loaded in fixtures
+        for table in binds.keys():
+            if table not in fixture_tables:
+                del binds[table]
+
+    # executing raw query doesn't automatically connects to the proper engine
+    # get all the unique engines
+    db_engines = set([engine for engine in binds.values()])
+    for db_engine in db_engines:
+
+        # get tables associated with that engine
+        table_list = ''.join([
+            '%s, ' % table.name for table, engine in binds.iteritems() if engine == db_engine
+            ])[:-2]
+        # truncate the tables and reset their primary keys
+        db.session.execute(
+            'TRUNCATE TABLE %s RESTART IDENTITY CASCADE;' % table_list, bind=db_engine
+            )
+        db.session.commit()
+        db.session.close()
 
 
 class MetaFixturesMixin(type):
