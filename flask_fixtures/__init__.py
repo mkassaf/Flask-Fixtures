@@ -1,9 +1,11 @@
 """
     flask.ext.fixtures
     ~~~~~~~~~~~~~~~~~~
+
     Flask-Fixtures is a `Flask <http://flask.pocoo.org>`_ extension that aids
     in the creation of fixtures data from serialized data files. It is
     compatible with the `SQLAlchemy <http://sqlalchemy.org>`_ library.
+
     :copyright: (c) 2015 Christopher Roach <ask.croach@gmail.com>.
     :license: MIT, see LICENSE for more details.
 """
@@ -49,6 +51,7 @@ TEST_TEARDOWN_NAMES = ('tearDown',)
 
 def push_ctx(app=None):
     """Creates new test context(s) for the given app
+
     If the app is not None, it overrides any existing app and/or request
     context. In other words, we will use the app that was passed in to create
     a new test request context on the top of the stack. If, however, nothing
@@ -56,6 +59,7 @@ def push_ctx(app=None):
     already in place and use that to run the test suite. If no app or request
     context can be found, an AssertionError is emitted to let the user know
     that they must somehow specify an application for testing.
+
     """
     if app is not None:
         ctx = app.test_request_context()
@@ -115,6 +119,7 @@ def setup(obj):
 
 
 def teardown(obj):
+    log.info('tearing down fixtures...')
     pop_ctx()
 
 
@@ -181,6 +186,7 @@ class MetaFixturesMixin(type):
     @staticmethod
     def teardown_handler(teardown_fixtures_fn, teardown_fn):
         """Returns a function that adds fixtures handling to the teardown method.
+
         Calls the given teardown method first before calling the fixtures teardown.
         """
         def handler(obj):
@@ -191,6 +197,7 @@ class MetaFixturesMixin(type):
     @staticmethod
     def get_child_fn(attrs, names, bases):
         """Returns a function from the child class that matches one of the names.
+
         Searches the child class's set of methods (i.e., the attrs dict) for all
         the functions matching the given list of names. If more than one is found,
         an exception is raised, if one is found, it is returned, and if none are
@@ -245,3 +252,4 @@ class FixturesMixin(six.with_metaclass(MetaFixturesMixin, object)):
     fixtures = None
     app = None
     db = None
+
