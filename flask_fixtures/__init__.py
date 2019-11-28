@@ -1,11 +1,9 @@
 """
     flask.ext.fixtures
     ~~~~~~~~~~~~~~~~~~
-
     Flask-Fixtures is a `Flask <http://flask.pocoo.org>`_ extension that aids
     in the creation of fixtures data from serialized data files. It is
     compatible with the `SQLAlchemy <http://sqlalchemy.org>`_ library.
-
     :copyright: (c) 2015 Christopher Roach <ask.croach@gmail.com>.
     :license: MIT, see LICENSE for more details.
 """
@@ -35,9 +33,6 @@ except ImportError:
 
 __version__ = '0.3.9'
 
-# storing tables loaded in the fixtures
-_fixture_tables = []
-
 # storing fixtures loaded from filesystem
 _fixture_dict = {}
 
@@ -54,7 +49,6 @@ TEST_TEARDOWN_NAMES = ('tearDown',)
 
 def push_ctx(app=None):
     """Creates new test context(s) for the given app
-
     If the app is not None, it overrides any existing app and/or request
     context. In other words, we will use the app that was passed in to create
     a new test request context on the top of the stack. If, however, nothing
@@ -62,7 +56,6 @@ def push_ctx(app=None):
     already in place and use that to run the test suite. If no app or request
     context can be found, an AssertionError is emitted to let the user know
     that they must somehow specify an application for testing.
-
     """
     if app is not None:
         ctx = app.test_request_context()
@@ -94,6 +87,7 @@ def setup(obj):
     # Rollback any lingering transactions
     obj.db.session.rollback()
 
+
     # Construct a list of paths within which fixtures may reside
     default_fixtures_dir = os.path.join(current_app.root_path, 'fixtures')
 
@@ -103,6 +97,7 @@ def setup(obj):
         if not os.path.isabs(directory):
             directory = os.path.abspath(os.path.join(current_app.root_path, directory))
         fixtures_dirs.append(directory)
+
     # Load all of the fixtures
     for filename in obj.fixtures:
         for directory in fixtures_dirs:
@@ -118,14 +113,8 @@ def setup(obj):
         else:
             raise IOError("Error loading '{0}'. File could not be found".format(filename))
 
+
 def teardown(obj):
-    log.info('tearing down fixtures...')
-    if obj.truncate_db:
-        # truncate the whole db, truncate_db is specified in child test class
-        truncate_db(obj.db)
-    else:
-        # just truncate the tables loaded in the fixtures
-        delete_fixtures(obj.db)
     pop_ctx()
 
 
@@ -134,6 +123,7 @@ def load_fixtures(db, fixtures):
     """
     conn = db.engine.connect()
     metadata = db.metadata
+
     for fixture in fixtures:
         if 'model' in fixture:
             module_name, class_name = fixture['model'].rsplit('.', 1)
@@ -143,46 +133,12 @@ def load_fixtures(db, fixtures):
                 obj = model(**fields)
                 db.session.add(obj)
             db.session.commit()
-            # store the table associated with this model for future cleanup
-            _fixture_tables.append(model.__table__)
         elif 'table' in fixture:
             table = Table(fixture['table'], metadata)
             conn.execute(table.insert(), fixture['records'])
-            _fixture_tables.append(table)
         else:
             raise ValueError("Fixture missing a 'model' or 'table' field: {0}".format(json.dumps(fixture)))
 
-def delete_fixtures(db):
-    """Deletes the loaded fixtures from database
-    """
-    truncate_db(db, _fixture_tables)
-    del _fixture_tables[:]
-
-def truncate_db(db, fixture_tables=[]):
-    # we can have multiple binds, get the tables and engines with each table
-    binds = db.get_binds()
-
-    if fixture_tables:
-        # only truncate the tables that were loaded in fixtures
-        for table in binds.keys():
-            if table not in fixture_tables:
-                del binds[table]
-
-    # executing raw query doesn't automatically connects to the proper engine
-    # get all the unique engines
-    db_engines = set([engine for engine in binds.values()])
-    for db_engine in db_engines:
-
-        # get tables associated with that engine
-        table_list = ''.join([
-            '%s, ' % table.name for table, engine in binds.iteritems() if engine == db_engine
-            ])[:-2]
-        # truncate the tables and reset their primary keys
-        db.session.execute(
-            'TRUNCATE TABLE %s RESTART IDENTITY CASCADE;' % table_list, bind=db_engine
-            )
-        db.session.commit()
-        db.session.close()
 
 
 class MetaFixturesMixin(type):
@@ -215,7 +171,6 @@ class MetaFixturesMixin(type):
     @staticmethod
     def setup_handler(setup_fixtures_fn, setup_fn):
         """Returns a function that adds fixtures handling to the setup method.
-
         Makes sure that fixtures are setup before calling the given setup method.
         """
         def handler(obj):
@@ -226,7 +181,6 @@ class MetaFixturesMixin(type):
     @staticmethod
     def teardown_handler(teardown_fixtures_fn, teardown_fn):
         """Returns a function that adds fixtures handling to the teardown method.
-
         Calls the given teardown method first before calling the fixtures teardown.
         """
         def handler(obj):
@@ -237,13 +191,11 @@ class MetaFixturesMixin(type):
     @staticmethod
     def get_child_fn(attrs, names, bases):
         """Returns a function from the child class that matches one of the names.
-
         Searches the child class's set of methods (i.e., the attrs dict) for all
         the functions matching the given list of names. If more than one is found,
         an exception is raised, if one is found, it is returned, and if none are
         found, a function that calls the default method on each parent class is
         returned.
-
         """
         def call_method(obj, method):
             """Calls a method as either a class method or an instance method.
@@ -293,4 +245,3 @@ class FixturesMixin(six.with_metaclass(MetaFixturesMixin, object)):
     fixtures = None
     app = None
     db = None
-
