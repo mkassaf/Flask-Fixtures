@@ -176,6 +176,7 @@ class MetaFixturesMixin(type):
     @staticmethod
     def setup_handler(setup_fixtures_fn, setup_fn):
         """Returns a function that adds fixtures handling to the setup method.
+
         Makes sure that fixtures are setup before calling the given setup method.
         """
         def handler(obj):
@@ -203,6 +204,7 @@ class MetaFixturesMixin(type):
         an exception is raised, if one is found, it is returned, and if none are
         found, a function that calls the default method on each parent class is
         returned.
+
         """
         def call_method(obj, method):
             """Calls a method as either a class method or an instance method.
